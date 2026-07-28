@@ -2,7 +2,8 @@
 FROM node:22.16.0-alpine AS dependencies
 WORKDIR /workspace
 COPY package.json ./
-RUN npm install --no-audit --no-fund
+COPY package-lock.json ./
+RUN npm ci --no-audit --no-fund
 
 FROM dependencies AS development
 COPY . .
