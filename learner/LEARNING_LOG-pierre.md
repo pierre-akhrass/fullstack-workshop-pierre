@@ -352,6 +352,7 @@ Why this matters: Selective staging (`git add -p`) lets me review and commit cha
 
 Step 1: Verified Git identity and remotes are correctly configured (user.name, user.email, origin/upstream).
 Step 2: Created feature branch `learning/02-git-workflow` and documented Git state model in this learning log.
+Step 3: Practiced selective staging by making two small documentation edits in different files, staging them independently, and committing them as two separate, focused commits (not mixed into one snapshot).
 
 **Commands and evidence**
 
@@ -377,6 +378,51 @@ git remote -v
 => origin  https://github.com/pierre-akhrass/fullstack-workshop-pierre.git (push)
 => upstream        https://github.com/FadiZahhar/fullstack-workshop-ogilvy.git (fetch)
 => upstream        https://github.com/FadiZahhar/fullstack-workshop-ogilvy.git (push)
+
+Step 2 — Create focused branch
+git switch -c learning/02-git-workflow
+=> Switched to a new branch 'learning/02-git-workflow'
+
+Step 3 — Practice selective staging with two separate commits
+git status
+=> On branch learning/02-git-workflow
+=> Changes not staged for commit:
+=>   modified:   learner/LEARNING_LOG-pierre.md
+=>   modified:   learner/SETUP_CHECKLIST.md
+
+First commit — stage only SETUP_CHECKLIST:
+git add learner/SETUP_CHECKLIST.md
+git diff --staged
+=> [shows only SETUP_CHECKLIST changes - LEARNING_LOG deliberately excluded]
+
+git commit -m "docs(learning): explain Git state model and patch staging"
+=> [learning/02-git-workflow dd12bbd] docs(learning): explain Git state model and patch staging
+=>  1 file changed, 8 insertions(+)
+
+Second commit — stage only LEARNING_LOG:
+git add learner/LEARNING_LOG-pierre.md
+git diff --staged
+=> [shows only LEARNING_LOG Module 02 entry - 92 insertions]
+
+git commit -m "docs(learning): document Module 02 Git workflow objectives and state model"
+=> [learning/02-git-workflow 3d5ad1a] docs(learning): document Module 02 Git workflow objectives and state model
+=>  1 file changed, 92 insertions(+)
+
+Final history:
+git log --oneline -n 5
+=> 3d5ad1a (HEAD -> learning/02-git-workflow) docs(learning): document Module 02 Git workflow objectives and state model
+=> dd12bbd docs(learning): explain Git state model and patch staging
+=> 1ca302e (origin/learning/01-setup, learning/01-setup) docs(learning): complete reproducible workstation setup
+=> 774c7aa (upstream/main, upstream/HEAD, origin/main, origin/HEAD, main) Initial commit
+```
+
+Why `git add .` can hide accidental scope: When you use `git add .`, ALL changes in the working tree are staged together, regardless of whether they're related. This means:
+- A bug fix and an unrelated formatting change get mixed in one commit
+- A reviewer can't distinguish separate concerns
+- If one change needs to be reverted, the entire commit must be backed out
+- Accidental debug code or experimental changes slip through unnoticed
+
+The correct approach is selective staging (`git add <file>` or `git add -p` for line-by-line review), which ensures each commit contains one logical unit of work.
 
 Step 2 — Create focused branch
 git switch -c learning/02-git-workflow
