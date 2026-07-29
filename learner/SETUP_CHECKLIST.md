@@ -73,3 +73,9 @@ git remote -v
 - `docker compose ps` output;
 - frontend and API documentation URLs;
 - one paragraph describing any setup issue and how it was resolved.
+
+---
+
+## Instructor feedback
+
+Good work on the setup. Remember to document any blocking issues with evidence that will help future learners.
