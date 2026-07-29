@@ -328,7 +328,7 @@ Need to validate that modified frontend/Dockerfile is correct per project standa
 
 - Date: 2026-07-29
 - Branch: learning/02-git-workflow
-- Pull request: pending
+- Pull request: https://github.com/FadiZahhar/fullstack-workshop-ogilvy/pull/12 (Draft)
 
 **Objectives in my own words**
 
@@ -353,6 +353,7 @@ Why this matters: Selective staging (`git add -p`) lets me review and commit cha
 Step 1: Verified Git identity and remotes are correctly configured (user.name, user.email, origin/upstream).
 Step 2: Created feature branch `learning/02-git-workflow` and documented Git state model in this learning log.
 Step 3: Practiced selective staging by making two small documentation edits in different files, staging them independently, and committing them as two separate, focused commits (not mixed into one snapshot).
+Step 4: Pushed branch to remote and opened draft pull request #12 with title, description following the template, and marked as draft to indicate work in progress.
 
 **Commands and evidence**
 
@@ -414,19 +415,25 @@ git log --oneline -n 5
 => dd12bbd docs(learning): explain Git state model and patch staging
 => 1ca302e (origin/learning/01-setup, learning/01-setup) docs(learning): complete reproducible workstation setup
 => 774c7aa (upstream/main, upstream/HEAD, origin/main, origin/HEAD, main) Initial commit
-```
 
-Why `git add .` can hide accidental scope: When you use `git add .`, ALL changes in the working tree are staged together, regardless of whether they're related. This means:
-- A bug fix and an unrelated formatting change get mixed in one commit
-- A reviewer can't distinguish separate concerns
-- If one change needs to be reverted, the entire commit must be backed out
-- Accidental debug code or experimental changes slip through unnoticed
+Step 4 — Push and open draft pull request
+git push -u origin learning/02-git-workflow
+=> Enumerating objects: 16, done.
+=> Counting objects: 100% (16/16), done.
+=> Delta compression using up to 8 threads
+=> Compressing objects: 100% (6/6), done.
+=> Writing objects: 100% (3.57 KiB)
+=> Total 12 (delta 9), reused 0 (delta 0), pack-reused 0
+=> remote: Create a pull request for 'learning/02-git-workflow' on GitHub by visiting:
+=> remote: https://github.com/pierre-akhrass/fullstack-workshop-pierre/pull/new/learning/02-git-workflow
+=> [new branch] learning/02-git-workflow -> learning/02-git-workflow
+=> branch 'learning/02-git-workflow' set up to track 'origin/learning/02-git-workflow'
 
-The correct approach is selective staging (`git add <file>` or `git add -p` for line-by-line review), which ensures each commit contains one logical unit of work.
-
-Step 2 — Create focused branch
-git switch -c learning/02-git-workflow
-=> Switched to a new branch 'learning/02-git-workflow'
+Draft PR created at: https://github.com/FadiZahhar/fullstack-workshop-ogilvy/pull/12
+- Title: docs(learning): demonstrate reviewed Git workflow
+- Status: DRAFT (cannot be merged until marked ready for review)
+- Commits: 4 commits with 467 additions, 1 deletion
+- Files: 3 files changed (learner/LEARNING_LOG-pierre.md, learner/SETUP_CHECKLIST.md)
 ```
 
 **Failure investigated**
