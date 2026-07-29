@@ -317,3 +317,95 @@ Need to validate that modified frontend/Dockerfile is correct per project standa
 - I can explain it without the reference code: yes
 - I can diagnose one failure in this area: yes
 - Confidence from 1-5: 5
+
+---
+
+## Current module entry
+
+### Module 02 — Git, GitHub, and pull requests
+
+**Date and branch**
+
+- Date: 2026-07-29
+- Branch: learning/02-git-workflow
+- Pull request: pending
+
+**Objectives in my own words**
+
+Learn to use Git branches, commits, remotes, and pull requests as a controlled change workflow. Practice focused commits, understand merge conflict resolution, and recognize how GitHub checks and branch protection enforce code quality gates.
+
+**Git state model explanation**
+
+Four distinct states in Git that must be understood:
+
+1. **Working tree**: Files on disk in my local directory. Changes here are not tracked by Git until I explicitly add them.
+
+2. **Staging area (index)**: Selected changes ready to be committed. `git add` moves changes from working tree to staging area. `git diff` shows working tree vs. staging area; `git diff --staged` shows staging area vs. last commit.
+
+3. **Local commit**: Snapshot recorded in my local repository after `git commit`. This exists only on my machine until I push. Multiple commits form the branch history.
+
+4. **Remote branch**: Commits on the server (origin or upstream). `git push` sends local commits to remote; `git pull` fetches remote and merges into working tree. A remote branch is a point-in-time record, not a live workspace.
+
+Why this matters: Selective staging (`git add -p`) lets me review and commit changes in logical units, each with a clear purpose. Using `git add .` blindly commits all changes together, hiding mistakes or unrelated edits.
+
+**Work completed**
+
+Step 1: Verified Git identity and remotes are correctly configured (user.name, user.email, origin/upstream).
+Step 2: Created feature branch `learning/02-git-workflow` and documented Git state model in this learning log.
+
+**Commands and evidence**
+
+```text
+Step 1 — Git identity and configuration
+git config user.name
+=> pierre-akhrass
+
+git config user.email
+=> pierreakhrass@outlook.com
+
+git status
+=> On branch learning/01-setup
+=> Your branch is up to date with 'origin/learning/01-setup'.
+=> nothing to commit, working tree clean
+
+git log --oneline --decorate -n 8
+=> 1ca302e (HEAD -> learning/01-setup, origin/learning/01-setup) docs(learning): complete reproducible workstation setup
+=> 774c7aa (upstream/main, upstream/HEAD, origin/main, origin/HEAD, main) Initial commit
+
+git remote -v
+=> origin  https://github.com/pierre-akhrass/fullstack-workshop-pierre.git (fetch)
+=> origin  https://github.com/pierre-akhrass/fullstack-workshop-pierre.git (push)
+=> upstream        https://github.com/FadiZahhar/fullstack-workshop-ogilvy.git (fetch)
+=> upstream        https://github.com/FadiZahhar/fullstack-workshop-ogilvy.git (push)
+
+Step 2 — Create focused branch
+git switch -c learning/02-git-workflow
+=> Switched to a new branch 'learning/02-git-workflow'
+```
+
+**Failure investigated**
+
+Not applicable yet; proceeding through steps sequentially.
+
+**Decision and tradeoff**
+
+Decision: Use `git add -p` for interactive staging instead of `git add .` to maintain focused commits. This approach ensures each commit has a single logical purpose and is easier to review and rollback if needed.
+
+**Security, privacy, and operations**
+
+No sensitive configuration yet; will validate that `.env` and credentials remain ignored throughout the workflow.
+
+**Review feedback**
+
+Pending mentor review.
+
+**Remaining uncertainty**
+
+Will learn about merge conflict resolution in Step 6, and GitHub check requirements in Step 5.
+
+**Self-rating**
+
+- I can repeat this with notes: yes
+- I can explain it without the reference code: yes (Git state model is foundational)
+- I can diagnose one failure in this area: not yet
+- Confidence from 1-5: 4
