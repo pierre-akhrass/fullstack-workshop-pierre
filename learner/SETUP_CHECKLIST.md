@@ -79,3 +79,9 @@ git remote -v
 ## Instructor feedback
 
 Good work on the setup. Remember to document any blocking issues with evidence that will help future learners.
+
+## Module 02 Git workflow notes
+
+Key learning: Use `git add -p` (patch mode) to review changes line-by-line before staging. This prevents accidental commits of unrelated changes. Never use `git add .` without reviewing `git diff` first.
+
+The Git state progression is: working tree → staging area → local commit → remote branch (after push). Each stage is reviewable and reversible.
