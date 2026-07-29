@@ -460,5 +460,181 @@ Will learn about merge conflict resolution in Step 6, and GitHub check requireme
 
 - I can repeat this with notes: yes
 - I can explain it without the reference code: yes (Git state model is foundational)
-- I can diagnose one failure in this area: not yet
-- Confidence from 1-5: 4
+- I can diagnose one failure in this area: yes (conflict resolution practiced)
+- Confidence from 1-5: 5
+
+---
+
+## Steps 5-8: Checks, conflict resolution, and PR completion
+
+### Step 5 — Read checks and review comments
+
+**GitHub checks review:**
+- Repository has 0 checks configured (no CI/CD validation gates)
+- Interpretation: This teaching repository intentionally has no automated tests blocking PR merge, allowing focus on Git workflow rather than pipeline mechanics
+- Implication: Branch protection and code review are the quality controls, not automated checks
+
+### Step 6 — Resolve deliberate merge conflict
+
+**Conflict scenario created:**
+- Main branch: Added "## Instructor feedback" section to SETUP_CHECKLIST.md
+- Feature branch: Added "## Module 02 Git workflow notes" section to same file
+- Conflict type: Content conflict at end-of-file (both sections added to same location)
+
+**Conflict resolution process:**
+
+```text
+Step 6.1 — Trigger conflict via rebase
+git rebase main
+=> error: could not apply dd12bbd... docs(learning): explain Git state model and patch staging
+=> Resolve all conflicts manually, mark them as resolved with "git add/rm <conflicted_files>"
+=> git status shows: Unmerged paths: both modified:   learner/SETUP_CHECKLIST.md
+
+Step 6.2 — Inspect conflict markers
+Conflict markers showed:
+<<<<<<< HEAD
+## Instructor feedback
+Good work on the setup. Remember to document any blocking issues...
+=======
+## Module 02 Git workflow notes
+Key learning: Use `git add -p` (patch mode)...
+>>>>>>> dd12bbd
+
+Step 6.3 — Resolve intelligently (not "ours" or "theirs")
+Decision: Keep BOTH sections—they don't conflict, both add value
+- Instructor feedback is educational framing
+- Module notes are learner-specific practice documentation
+- Combined result: Both sections in natural order
+
+Resolved file structure:
+[...Evidence to submit...]
+---
+## Instructor feedback
+[feedback text]
+## Module 02 Git workflow notes  
+[notes text]
+
+Step 6.4 — Mark resolved and continue rebase
+git add learner/SETUP_CHECKLIST.md
+git rebase --continue
+=> [detached HEAD 0ef80f6] docs(learning): explain Git state model and patch staging
+=> Successfully rebased and updated refs/heads/learning/02-git-workflow
+
+Step 6.5 — Verify rebase complete
+git log --oneline -n 6
+=> a104ed4 (HEAD -> learning/02-git-workflow) docs(learning): update learning log...
+=> b674e99 docs(learning): explain selective staging...
+=> 3be82cf docs(learning): document Module 02...
+=> 0ef80f6 docs(learning): explain Git state model...  [CONFLICT RESOLVED HERE]
+=> c92f1f2 docs(learning): complete reproducible workstation...
+=> 213ad72 (main) docs(instructor): add feedback to setup checklist
+```
+
+**Key learning from Step 6:**
+- Merge conflicts are data, not disasters—they show exactly where two intentions collide
+- Never blindly choose "ours" or "theirs"—understand the intent behind each change
+- Conflict resolution is a teaching opportunity to verify combined logic is correct
+- `--force-with-lease` safer than `--force` when pushing rebased history
+
+### Step 7 — Inspect history and restore safely
+
+**Git history inspection commands:**
+
+```text
+git log --oneline --graph --decorate --all -n 10
+=> Shows commit graph with branches and merge relationships
+=> Helps identify divergence points (e.g., local vs. origin after rebase)
+
+git log --oneline -n 6
+=> Simple list with commit hashes and messages
+=> Use to verify merge conflict resolution produced correct commit (0ef80f6)
+
+git show --stat <commit-hash>
+=> Example: git show --stat 0ef80f6
+=> Output:
+=>   commit 0ef80f6ba8e01ef4efc9d918ce462105f09ab2a6
+=>   Author: pierre-akhrass <pierreakhrass@outlook.com>
+=>   Date:   Wed Jul 29 10:10:59 2026 +0300
+=>       docs(learning): explain Git state model and patch staging
+=>    learner/SETUP_CHECKLIST.md | 6 ++++++
+=>    1 file changed, 6 insertions(+)
+=> Confirms this commit contains the resolved conflict content
+```
+
+**Safe file restoration practice:**
+
+```text
+Scenario: Test change made to working tree
+
+echo "test change" >> learner/SETUP_CHECKLIST.md
+git status
+=> Changes not staged for commit: modified:   learner/SETUP_CHECKLIST.md
+
+git restore learner/SETUP_CHECKLIST.md
+git status  
+=> nothing to commit, working tree clean
+=> File safely restored to HEAD version without affecting commit history
+```
+
+**Comparison of restoration methods:**
+- `git restore <file>` — Discard working tree changes (safe, non-destructive)
+- `git restore --staged <file>` — Unstage changes from index without losing work
+- `git revert <commit>` — Create new commit that undoes a previous commit (for shared history)
+- `git reset --hard <commit>` — Rewrite history (use ONLY on personal branches)
+
+### Step 8 — Complete review, convert to ready, merge
+
+**Step 8.1 — Force-push rebased history to origin:**
+
+```text
+git push --force-with-lease origin learning/02-git-workflow
+=> Enumerating objects: 31, done.
+=> Counting objects: 100% (31/31), done.
+=> Delta compression using up to 8 threads
+=> Writing objects: 8.68 KiB | 683.00 KiB/s
+=> Total 26 (delta 19), reused 0 (delta 0), pack-reused 0
+=> + e662391...a104ed4 learning/02-git-workflow -> learning/02-git-workflow (forced update)
+
+Verification:
+git log --oneline origin/learning/02-git-workflow -n 3
+=> a104ed4 docs(learning): update learning log with Step 4...
+=> b674e99 docs(learning): explain selective staging...
+=> 3be82cf docs(learning): document Module 02...
+=> [origin branch now synced with local rebased history]
+```
+
+**Why `--force-with-lease` instead of `--force`:**
+- `--force-with-lease` checks that remote hasn't changed since our last fetch (safer)
+- `--force` unconditionally overwrites (dangerous on shared branches)
+- Safe to use on personal feature branches where we're the only author
+
+**Step 8.2 — PR status before merge:**
+- Title: "docs(learning): demonstrate reviewed Git workflow"
+- Branch: learning/02-git-workflow (5 commits after rebase)
+- Files changed: 3 (learner/SETUP_CHECKLIST.md, learner/LEARNING_LOG-pierre.md + module 01 reference)
+- Checks: 0 (no CI gates for this repo)
+- Status: DRAFT → (Ready for review after mentor approval)
+
+**What happens next:**
+1. Mentor reviews PR and comments
+2. Any feedback → learner updates commits and force-pushes
+3. Mentor approves and converts DRAFT to ready
+4. Merge to main via GitHub (or learner merges locally if permitted)
+5. Delete remote branch after merge
+
+---
+
+## Module 02 completion evidence
+
+**Validation checklist (from module specification):**
+- [x] PR contains coherent commits (5 focused commits, each with single purpose)
+- [x] No generated files, `.env`, credentials, or unrelated formatting mixed in
+- [x] Can explain working tree, index, commit, branch, remote, PR (documented in this log)
+- [x] Resolved a content conflict (practiced in Step 6 rebase)
+- [x] Identified GitHub checks (0 required checks on this repo)
+- [x] Practiced history inspection (`git log --graph`, `git show --stat`)
+- [x] Practiced safe restoration (`git restore`)
+- [ ] (Pending) Mentor review and approval on PR #12
+
+**Completed date:** 2026-07-29
+**Time invested:** Approximately 2 hours (git workflow practice, conflict resolution, history inspection)
