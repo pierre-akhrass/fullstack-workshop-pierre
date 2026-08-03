@@ -638,3 +638,180 @@ git log --oneline origin/learning/02-git-workflow -n 3
 
 **Completed date:** 2026-07-29
 **Time invested:** Approximately 2 hours (git workflow practice, conflict resolution, history inspection)
+
+---
+
+## Current module entry
+
+### Module 03 — HTTP, REST, JSON, and API contracts
+
+**Date and branch**
+
+- Date: 2026-08-03
+- Branch: learning/03-api-contracts
+- Pull request: not opened yet
+
+**Objectives in my own words**
+
+Understand HTTP as a strict contract between clients and services: method semantics, status code meaning, request/response structure, and predictable error behavior. Validate the real running API contract against documentation and record mismatches with reproducible evidence.
+
+**Work completed**
+
+Started Module 03 on the required branch, verified service availability, exported and inspected OpenAPI, traced wire-level HTTP behavior with verbose curl, exercised documented authentication routes, and built an evidence-backed status/error matrix from actual runtime behavior.
+
+**Commands and evidence**
+
+```text
+Section 0 — Prerequisite verification and branch setup
+docker compose ps
+=> backend: Up (healthy) on 0.0.0.0:8000
+=> db: Up (healthy)
+=> frontend: Up on 0.0.0.0:3000
+
+git switch -c learning/03-api-contracts
+=> Switched to a new branch 'learning/03-api-contracts'
+
+Section 1 — Inspect documented contract and OpenAPI
+curl --fail http://localhost:8000/openapi.json -o workboard-openapi.json
+=> download succeeded (686 bytes)
+
+python -m json.tool workboard-openapi.json
+=> openapi: 3.1.0
+=> info.title: Workboard Starter API
+=> info.version: 0.1.0
+=> paths present: /health/live, /health/ready
+
+curl -i http://localhost:8000/docs
+=> HTTP/1.1 200 OK
+=> Swagger UI HTML returned (url: /openapi.json)
+
+Section 2 — Trace request on the wire
+curl -v http://localhost:8000/api/v1/status
+=> DNS resolved localhost to ::1 and 127.0.0.1
+=> TCP connection established to ::1:8000
+=> Request line: GET /api/v1/status HTTP/1.1
+=> Request headers: Host, User-Agent, Accept
+=> Response: HTTP/1.1 404 Not Found
+=> Response headers include content-type: application/json
+=> Body: {"detail":"Not Found"}
+
+Section 3 — Exercise authentication manually
+curl -i -X POST http://localhost:8000/api/v1/auth/register -H "Content-Type: application/json" --data-binary "@.tmp-register.json"
+=> HTTP/1.1 404 Not Found
+=> {"detail":"Not Found"}
+
+curl -i -X POST http://localhost:8000/api/v1/auth/login -H "Content-Type: application/x-www-form-urlencoded" --data-urlencode "username=api-learner@example.com" --data-urlencode "password=StrongPassword123!"
+=> HTTP/1.1 404 Not Found
+=> {"detail":"Not Found"}
+
+Section 4 — Status/error matrix evidence probes
+curl -i http://localhost:8000/health/live
+=> HTTP/1.1 200 OK
+=> {"status":"alive"}
+
+curl -i http://localhost:8000/health/ready
+=> HTTP/1.1 200 OK
+=> {"status":"ready"}
+
+curl -i -X POST http://localhost:8000/health/live
+=> HTTP/1.1 405 Method Not Allowed
+=> allow: GET
+=> {"detail":"Method Not Allowed"}
+
+curl -i http://localhost:8000/api/v1/projects
+=> HTTP/1.1 404 Not Found
+=> {"detail":"Not Found"}
+
+curl -i -H "Authorization: Bearer invalid.token.value" http://localhost:8000/api/v1/projects
+=> HTTP/1.1 404 Not Found
+=> {"detail":"Not Found"}
+```
+
+**Section summaries for explanation**
+
+Section 1 summary:
+- The service is running and Swagger UI is reachable at `/docs`.
+- Exported OpenAPI confirms only two active paths in the running snapshot: `/health/live` and `/health/ready`.
+- Documented contract (`docs/api-contract.md`) describes broader `/api/v1` resources, but those are not currently present in runtime schema.
+
+Section 2 summary:
+- `curl -v` clearly separates transport from application behavior.
+- Transport succeeded (DNS + TCP connect), but application route `/api/v1/status` returned `404`.
+- This proves the server is up while the requested route is missing.
+
+Section 3 summary:
+- Auth endpoints from module instructions (`/api/v1/auth/register`, `/api/v1/auth/login`) currently return `404`.
+- No token was issued, so protected-endpoint auth testing is blocked in this runtime snapshot.
+- Security rule still upheld: no tokens written to tracked files.
+
+Section 4 summary (observed matrix in current runtime):
+- Valid health GET requests: `200`.
+- Wrong method on existing route: `405` with `allow: GET`.
+- Missing API resource paths: `404` with `{ "detail": "Not Found" }`.
+- Because `/api/v1/projects` is missing, invalid-token request also resolves as `404` instead of `401` in this environment.
+
+Section 5 summary (idempotency and retry implications):
+- `GET /projects` (when implemented) is semantically safe and idempotent.
+- `POST /projects` is not idempotent by default; retries can create duplicates unless server enforces unique constraints or idempotency keys.
+- `PATCH /tasks/{id}` can be idempotent only when applying the exact same effective state repeatedly.
+- `DELETE` is idempotent by semantics: deleting an already-deleted resource should not create additional state change.
+- Practical rule: network retries for create/payment-like operations should use idempotency keys in production.
+
+Section 6 summary (backward-compatible filter contract proposal):
+- Proposed endpoint shape:
+	`GET /api/v1/projects/{project_id}/tasks?status=in_progress&priority=high`
+- Validation:
+	- `status` enum: `backlog | in_progress | done`
+	- `priority` enum: `low | medium | high`
+	- invalid enum value returns `422` (FastAPI validation)
+- Combination behavior:
+	- AND semantics when both filters provided
+	- omitted filters mean "no filter" for that dimension
+- Empty result:
+	- return `200` with `[]` (not `404`)
+- Compatibility:
+	- existing endpoint remains unchanged when query params are omitted
+- Future pagination:
+	- reserve `limit`/`offset` or cursor params without changing current response contract
+- Data/index implications:
+	- add composite/individual indexes on `(project_id, status)` and `(project_id, priority)` for scale
+- OpenAPI + frontend:
+	- document query params in OpenAPI; add typed query interface in frontend client
+- Tests:
+	- success, each single filter, combined filters, invalid enum `422`, inaccessible project `404`, auth failures once auth layer exists
+
+Section 7 summary:
+- Evidence recorded in this learning log (commands, outputs, matrix, and contract proposal).
+- No change made to `docs/api-contract.md` because runtime behavior mismatch was observed, not an implemented contract change.
+
+**Failure investigated**
+
+- Symptom: Module 03 `/api/v1` endpoints documented in module text return `404` in running service.
+- Smallest reproduction: `curl -i http://localhost:8000/api/v1/status`
+- Hypothesis: running backend snapshot only includes health routes.
+- Evidence that confirmed or rejected it: exported `/openapi.json` lists only `/health/live` and `/health/ready`.
+- Root cause: this environment is currently running a minimal API surface relative to workshop contract text.
+- Prevention or test added: always verify `/openapi.json` before writing endpoint-level test expectations.
+
+**Decision and tradeoff**
+
+Decision: continue Module 03 with evidence-based analysis using actual runtime responses, while documenting expected semantics from the contract spec. Alternative: block the entire module until full `/api/v1` routes are available. Chosen approach preserves learning momentum and produces actionable mismatch evidence.
+
+**Security, privacy, and operations**
+
+No bearer token was generated or committed. Temporary request body file for register testing was removed after use. All responses captured were non-sensitive (`404`, `405`, health payloads).
+
+**Review feedback**
+
+Pending mentor review.
+
+**Remaining uncertainty**
+
+Whether this module is expected to run against a fuller reference API branch/environment than the currently running container image.
+
+**Self-rating**
+
+- I can repeat this with notes: yes
+- I can explain it without the reference code: yes
+- I can diagnose one failure in this area: yes
+- Confidence from 1-5: 4
