@@ -643,6 +643,245 @@ git log --oneline origin/learning/02-git-workflow -n 3
 
 ## Current module entry
 
+### Module 04 — Docker and container fundamentals
+
+**Date and branch**
+
+- Date: 2026-08-05
+- Branch: learning/04-docker-fundamentals
+- Pull request: not opened yet
+
+**Objectives in my own words**
+
+Understand how Docker images are assembled from layers, how containers run those images as isolated processes, and how build order, runtime identity, health checks, ports, and build context affect security, reliability, and rebuild speed.
+
+**Work completed**
+
+Inspected the backend and frontend production Dockerfiles, built both final production images without Compose, verified non-root runtime users, ran each image in isolation, inspected health/process/port metadata, explored Docker cache behavior with repeated and deliberately invalidated builds, performed two failure drills, and fixed a frontend production build issue caused by a TypeScript reference to `process.env` in the Nuxt config.
+
+**Commands and evidence**
+
+```text
+Step 1 — Dockerfile inspection
+backend/Dockerfile stages:
+- base: python:3.13.5-slim, sets Python env flags, creates /workspace, creates non-root user/group app
+- development: copies full backend source, installs `.[dev]`, runs uvicorn with --reload, USER app, EXPOSE 8000
+- production: copies full backend source, installs package `.`, USER app, EXPOSE 8000, HEALTHCHECK /health/live, runs uvicorn without reload
+
+frontend/Dockerfile stages:
+- dependencies: node:22.16.0-alpine, copies package manifests first, runs `npm ci --no-audit --no-fund`
+- development: copies full source, runs `npm run dev`, EXPOSE 3000
+- build: copies full source, runs `npm run build`
+- production: fresh node:22.16.0-alpine, sets runtime env defaults, creates non-root user app, copies only `.output` from build stage, USER app, EXPOSE 3000, runs `node server/index.mjs`
+
+Curriculum mismatch observed:
+- `e2e/Dockerfile` does not exist in this repository snapshot
+- `./scripts/check-secrets.sh` does not exist in this repository snapshot
+
+Step 2 — Build production images without Compose
+docker build --progress=plain --target production -t workboard-backend:module04 backend
+=> success
+=> final image named workboard-backend:module04
+
+docker build --progress=plain --target production -t workboard-frontend:module04 frontend
+=> initially failed with:
+=> nuxt.config.ts(7,16): error TS2591: Cannot find name 'process'
+
+Root-cause fix applied:
+- changed frontend runtimeConfig default from `process.env.NUXT_PUBLIC_API_BASE || ...` to a static default string
+- reasoning: Nuxt runtime config can still be overridden by `NUXT_PUBLIC_API_BASE` at runtime without directly referencing the Node global in config code
+
+docker build --progress=plain --target production -t workboard-frontend:module04 frontend
+=> success after config fix
+
+docker image ls --format "table {{.Repository}}\t{{.Tag}}\t{{.Size}}" | findstr /I "workboard-backend workboard-frontend"
+=> workboard-backend  module04  206MB
+=> workboard-frontend module04  162MB
+
+Relevant history excerpts
+docker history workboard-backend:module04 --format "table {{.CreatedBy}}\t{{.Size}}"
+=> COPY --chown=app:app . .                  4.64kB
+=> RUN pip install --no-cache-dir .          85MB
+=> USER app                                  0B
+=> HEALTHCHECK /health/live                  0B
+
+docker history workboard-frontend:module04 --format "table {{.CreatedBy}}\t{{.Size}}"
+=> COPY --from=build ... /workspace/.output  2.76MB
+=> RUN addgroup -S app && adduser -S app     3.19kB
+=> base node layer                           146MB
+=> no source tree copied into final runtime stage
+
+Step 3 — Prove runtime identity
+docker run --rm --entrypoint whoami workboard-backend:module04
+=> app
+
+docker run --rm --entrypoint id workboard-backend:module04
+=> uid=999(app) gid=999(app) groups=999(app)
+
+docker run --rm --entrypoint whoami workboard-frontend:module04
+=> app
+
+docker run --rm --entrypoint id workboard-frontend:module04
+=> uid=100(app) gid=101(app) groups=101(app)
+
+Step 4 — Run isolated containers and inspect runtime
+docker run -d --name module04-backend -p 18000:8000 workboard-backend:module04
+=> started container
+
+docker inspect module04-backend --format "User={{.Config.User}} Cmd={{json .Config.Cmd}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} Ports={{json .NetworkSettings.Ports}}"
+=> User=app
+=> Cmd=["uvicorn","app.main:app","--host","0.0.0.0","--port","8000","--proxy-headers"]
+=> Health=starting
+=> Ports maps 8000/tcp to host 18000
+
+curl -i http://localhost:18000/health/live
+=> HTTP/1.1 200 OK
+=> {"status":"alive"}
+
+docker run -d --name module04-frontend -p 13000:3000 workboard-frontend:module04
+=> started container
+
+docker inspect module04-frontend --format "User={{.Config.User}} Cmd={{json .Config.Cmd}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}none{{end}} Ports={{json .NetworkSettings.Ports}}"
+=> User=app
+=> Cmd=["node","server/index.mjs"]
+=> Health=none
+=> Ports maps 3000/tcp to host 13000
+
+curl -i http://localhost:13000/api/health
+=> HTTP/1.1 200 OK
+=> {"status":"ready"}
+
+Step 5 — Explore build cache deliberately
+Repeated unchanged builds:
+docker build --progress=plain --target production -t workboard-backend:module04 backend
+=> all meaningful layers CACHED including COPY and pip install
+
+docker build --progress=plain --target production -t workboard-frontend:module04 frontend
+=> all meaningful layers CACHED including npm ci, build, and final copy
+
+Late source file probe:
+- temporary reversible change in frontend/app/app.vue
+docker build --progress=plain --target production -t workboard-frontend:module04 frontend
+=> `npm ci` stayed CACHED
+=> `COPY . .`, `npm run build`, and final artifact copy rebuilt
+
+Dependency manifest probe:
+- temporary reversible change to frontend/package.json version field only
+docker build --progress=plain --target production -t workboard-frontend:module04 frontend
+=> `COPY package.json` rebuilt
+=> `npm ci` reran and took ~177s
+=> downstream build stage reran
+
+Why dependency manifests are copied early:
+- if only source changes, package installation layer stays cached
+- if manifest changes, dependency layer is correctly invalidated and rebuilt
+- this reduces rebuild time during normal app development and CI
+
+Step 6 — Build context and exclusions
+Root .dockerignore excludes:
+- .git
+- .env
+- Python caches
+- node_modules
+- .nuxt
+- .output
+- coverage
+
+backend/.dockerignore excludes:
+- __pycache__, pyc, pytest/mypy/ruff caches, .venv, coverage artifacts
+
+frontend/.dockerignore excludes:
+- node_modules, .nuxt, .output, coverage, npm-debug logs
+
+Measured context from build output:
+- backend context transfer: 485B
+- frontend context transfer: about 1.05-1.16kB during these builds
+
+Interpretation:
+- context is intentionally tiny
+- build inputs are constrained to relevant app files only
+- no `.env` or `.git` content appears in context output
+
+Step 7 — Failure drills
+Failure drill 1: wrong executable
+docker run --rm --entrypoint does-not-exist workboard-backend:module04
+=> exec: "does-not-exist": executable file not found in $PATH
+Diagnosis:
+- container creation succeeded up to runtime startup
+- PID 1 could not start because the executable was absent
+- smallest diagnostic: inspect entrypoint/CMD and verify binary exists in image PATH
+
+Failure drill 2: host port already in use
+docker run --rm -p 18000:3000 workboard-frontend:module04
+=> Bind for 0.0.0.0:18000 failed: port is already allocated
+Diagnosis:
+- failure happened in Docker networking before app startup
+- smallest diagnostic: inspect running containers and host port mappings
+
+Step 8 — Signal and shutdown behavior
+docker logs module04-backend --tail 20
+=> Started server process [1]
+=> Uvicorn running on http://0.0.0.0:8000
+
+docker stop module04-backend
+docker logs module04-backend --tail 20
+=> Shutting down
+=> Waiting for application shutdown.
+=> Application shutdown complete.
+=> Finished server process [1]
+
+docker logs module04-frontend --tail 20
+=> Listening on http://0.0.0.0:3000
+
+docker stop module04-frontend
+=> container stopped cleanly
+
+PID 1 interpretation:
+- backend PID 1 is uvicorn
+- frontend PID 1 is node running Nitro server
+- `docker stop` sends SIGTERM to PID 1; graceful behavior depends on that process handling shutdown correctly
+```
+
+**Failure investigated**
+
+- Symptom: frontend production image build failed during `npm run build`.
+- Smallest reproduction: `docker build --target production -t workboard-frontend:module04 frontend`
+- Hypothesis: TypeScript type-checking in `nuxt.config.ts` cannot resolve the Node global `process` inside the container build.
+- Evidence that confirmed or rejected it: Docker build failed with `nuxt.config.ts(7,16): error TS2591: Cannot find name 'process'`.
+- Root cause: the Nuxt config referenced `process.env` directly, which pulled in a Node-global typing expectation not configured for this frontend build path.
+- Prevention or test added: replaced direct `process.env` access with a static default runtimeConfig value, then rebuilt the production image successfully.
+
+**Decision and tradeoff**
+
+Decision: fix the frontend build by removing the direct `process.env` reference from `nuxt.config.ts` instead of adding and maintaining Node typing configuration just for config compilation. Alternative: add explicit Node type dependencies/configuration. The chosen approach is simpler and preserves runtime configurability through Nuxt's standard `NUXT_PUBLIC_*` override behavior.
+
+**Security, privacy, and operations**
+
+- Both final production images run as non-root `app` users, reducing impact if the process is compromised.
+- Non-root is not a full sandbox; the container still has network access and any permissions granted by the runtime.
+- No secrets were observed in image history, build args, or transferred build context.
+- Backend image includes an explicit liveness health check; frontend image currently relies on external probing and has no Docker HEALTHCHECK.
+- Frontend final stage copies only build output, which reduces attack surface relative to copying the full source tree into runtime.
+
+**Review feedback**
+
+Pending mentor review.
+
+**Remaining uncertainty**
+
+Whether the missing `e2e/Dockerfile` and `scripts/check-secrets.sh` are intentional for this repository snapshot or expected to be added later in the curriculum.
+
+**Self-rating**
+
+- I can repeat this with notes: yes
+- I can explain it without the reference code: yes
+- I can diagnose one failure in this area: yes
+- Confidence from 1-5: 5
+
+---
+
+## Current module entry
+
 ### Module 03 — HTTP, REST, JSON, and API contracts
 
 **Date and branch**
